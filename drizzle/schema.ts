@@ -1,17 +1,10 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,33 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Relay sessions table - tracks active NFC relay sessions
+ */
+export const relaySessions = mysqlTable("relay_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 128 }).notNull().unique(),
+  readerConnected: boolean("readerConnected").default(false).notNull(),
+  emulatorConnected: boolean("emulatorConnected").default(false).notNull(),
+  relayActive: boolean("relayActive").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastActivity: timestamp("lastActivity").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RelaySession = typeof relaySessions.$inferSelect;
+export type InsertRelaySession = typeof relaySessions.$inferInsert;
+
+/**
+ * Communication logs table - stores APDU exchanges for debugging
+ */
+export const communicationLogs = mysqlTable("communication_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 128 }).notNull(),
+  direction: mysqlEnum("direction", ["request", "response"]).notNull(),
+  apduData: text("apduData").notNull(),
+  clientType: mysqlEnum("clientType", ["reader", "emulator"]).notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export type CommunicationLog = typeof communicationLogs.$inferSelect;
+export type InsertCommunicationLog = typeof communicationLogs.$inferInsert;

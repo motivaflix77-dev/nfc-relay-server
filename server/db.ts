@@ -1,11 +1,10 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, relaySessions, InsertRelaySession, RelaySession, communicationLogs, InsertCommunicationLog } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -89,4 +88,81 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Relay session management functions
+
+export async function createRelaySession(sessionId: string): Promise<RelaySession | null> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create relay session: database not available");
+    return null;
+  }
+
+  try {
+    const values: InsertRelaySession = {
+      sessionId,
+      readerConnected: false,
+      emulatorConnected: false,
+      relayActive: false,
+    };
+
+    await db.insert(relaySessions).values(values);
+    return await getRelaySession(sessionId);
+  } catch (error) {
+    console.error("[Database] Failed to create relay session:", error);
+    return null;
+  }
+}
+
+export async function getRelaySession(sessionId: string): Promise<RelaySession | null> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get relay session: database not available");
+    return null;
+  }
+
+  const result = await db.select().from(relaySessions).where(eq(relaySessions.sessionId, sessionId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateRelaySession(
+  sessionId: string,
+  updates: Partial<Omit<RelaySession, 'id' | 'sessionId' | 'createdAt' | 'lastActivity'>>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update relay session: database not available");
+    return;
+  }
+
+  try {
+    await db.update(relaySessions)
+      .set(updates)
+      .where(eq(relaySessions.sessionId, sessionId));
+  } catch (error) {
+    console.error("[Database] Failed to update relay session:", error);
+  }
+}
+
+export async function logCommunication(log: InsertCommunicationLog): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot log communication: database not available");
+    return;
+  }
+
+  try {
+    await db.insert(communicationLogs).values(log);
+  } catch (error) {
+    console.error("[Database] Failed to log communication:", error);
+  }
+}
+
+export async function getSessionLogs(sessionId: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get session logs: database not available");
+    return [];
+  }
+
+  return await db.select().from(communicationLogs).where(eq(communicationLogs.sessionId, sessionId));
+}
