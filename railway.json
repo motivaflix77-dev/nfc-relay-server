@@ -1,0 +1,10 @@
+{
+  "build": {
+    "builder": "nixpacks",
+    "buildCommand": "npm install"
+  },
+  "deploy": {
+    "startCommand": "node nfc_relay_server/server.js",
+    "rootDirectory": "nfc_relay_server"
+  }
+}
